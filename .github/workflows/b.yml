@@ -1,0 +1,73 @@
+name: Build Haxe ARM64
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04-arm
+
+    steps:
+      - name: Checkout Haxe
+        uses: actions/checkout@v4
+        with:
+          repository: HaxeFoundation/haxe
+          ref: development
+          submodules: recursive
+          path: hx
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ocaml \
+            opam \
+            neko neko-dev \
+            libpcre2-dev \
+            zlib1g-dev \
+            libmbedtls-dev
+
+      - name: Check toolchain
+        run: |
+          ocaml --version
+          ocamlc -version
+          opam --version
+          neko -version
+
+      - name: Initialize OPAM
+        run: |
+          opam init --disable-sandboxing --yes
+          eval "$(opam env)"
+
+      - name: Install Haxe dependencies
+        working-directory: hx
+        run: |
+          eval "$(opam env)"
+          opam pin add haxe . --kind=path --no-action
+          opam install haxe --deps-only --yes
+
+      - name: Build Haxe
+        working-directory: hx
+        run: |
+          eval "$(opam env)"
+          make
+
+      - name: Check Haxe
+        working-directory: hx
+        run: |
+          ./haxe -version
+          file ./haxe
+
+      - name: Package
+        run: |
+          mkdir haxe-linux-arm64
+          cp hx/haxe haxe-linux-arm64/
+          cp -r hx/std haxe-linux-arm64/
+          git -C hx log -1 --format=%H > haxe-linux-arm64/commit.txt
+          tar -czf haxe-linux-arm64.tar.gz haxe-linux-arm64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: haxe-linux-arm64
+          path: haxe-linux-arm64.tar.gz
